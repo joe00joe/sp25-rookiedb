@@ -15,7 +15,7 @@ import java.util.Optional;
  * An inner node or a leaf node. See InnerNode and LeafNode for more
  * information.
  */
-abstract class BPlusNode {
+abstract class        BPlusNode {
     // Core API ////////////////////////////////////////////////////////////////
     /**
      * n.get(k) returns the leaf node on which k may reside when queried from n.
