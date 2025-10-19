@@ -87,7 +87,15 @@ public class SortOperator extends QueryOperator {
      */
     public Run sortRun(Iterator<Record> records) {
         // TODO(proj3_part1): implement
-        return null;
+        List<Record> sortedRecords = new ArrayList<>();
+        while(records.hasNext()){
+            sortedRecords.add(records.next());
+        }
+        if(sortedRecords.isEmpty()) return null;
+        sortedRecords.sort(comparator);
+        Run run = new Run(transaction, getSchema());
+        run.addAll(sortedRecords);
+        return run;
     }
 
     /**
@@ -108,7 +116,31 @@ public class SortOperator extends QueryOperator {
     public Run mergeSortedRuns(List<Run> runs) {
         assert (runs.size() <= this.numBuffers - 1);
         // TODO(proj3_part1): implement
-        return null;
+
+        List<Iterator<Record>> runIterators = new ArrayList<>();
+        for(Run run : runs){
+            runIterators.add(run.iterator());
+        }
+        RecordPairComparator recordPairComparator = new RecordPairComparator();
+        PriorityQueue<Pair<Record, Integer>> fronts = new PriorityQueue<>(recordPairComparator);
+        for(int i = 0; i < runIterators.size(); i++){
+            Iterator<Record> curRunIterator = runIterators.get(i);
+            if(curRunIterator.hasNext()) {
+                fronts.add(new Pair<>(curRunIterator.next(), i));
+            }
+        }
+        Run  mergeRun = new Run(transaction, getSchema());
+        while(!fronts.isEmpty()){
+            Pair<Record, Integer> minRecord = fronts.poll();
+            mergeRun.add(minRecord.getFirst());
+            Iterator<Record>  reduceRun = runIterators.get(minRecord.getSecond());
+            if(reduceRun.hasNext()){
+                fronts.add(new Pair<>(reduceRun.next(), minRecord.getSecond()));
+            }
+
+
+        }
+        return mergeRun;
     }
 
     /**
@@ -133,7 +165,21 @@ public class SortOperator extends QueryOperator {
      */
     public List<Run> mergePass(List<Run> runs) {
         // TODO(proj3_part1): implement
-        return Collections.emptyList();
+        int step = this.numBuffers - 1;
+        List<Run>  mergeRuns = new ArrayList<>();
+        int total = runs.size();
+        // 计算总分片数（向上取整）
+        int chunks = (total + step - 1) / step;
+
+        for (int i = 0; i < chunks; i++) {
+            // 计算当前分片的起始索引
+            int start = i * step;
+            // 计算当前分片的结束索引（不超过列表总长度）
+            int end = Math.min(start + step, total);
+            // 截取子列表并添加到结果中
+            mergeRuns.add(mergeSortedRuns(runs.subList(start, end)));
+        }
+        return mergeRuns;
     }
 
     /**
@@ -149,7 +195,23 @@ public class SortOperator extends QueryOperator {
         Iterator<Record> sourceIterator = getSource().iterator();
 
         // TODO(proj3_part1): implement
-        return makeRun(); // TODO(proj3_part1): replace this!
+        // 0 pass
+        List<Run> initRuns = new ArrayList<>();
+        while(sourceIterator.hasNext()) {
+            Iterator<Record> blockIterator = getBlockIterator(sourceIterator, getSchema(), numBuffers);
+            Run run = sortRun(blockIterator);
+            if (run != null) {
+                initRuns.add(run);
+            }
+        }
+        if(initRuns.isEmpty()) return  makeRun();
+        //merge pass
+        List<Run> curRuns = initRuns;
+        while(curRuns.size() > 1){
+            curRuns = mergePass(curRuns);
+        }
+
+        return curRuns.get(0);
     }
 
     /**

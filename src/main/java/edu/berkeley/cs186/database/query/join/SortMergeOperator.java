@@ -2,6 +2,7 @@ package edu.berkeley.cs186.database.query.join;
 
 import edu.berkeley.cs186.database.TransactionContext;
 import edu.berkeley.cs186.database.common.iterator.BacktrackingIterator;
+import edu.berkeley.cs186.database.databox.DataBox;
 import edu.berkeley.cs186.database.query.JoinOperator;
 import edu.berkeley.cs186.database.query.MaterializeOperator;
 import edu.berkeley.cs186.database.query.QueryOperator;
@@ -134,12 +135,70 @@ public class SortMergeOperator extends JoinOperator {
             return nextRecord;
         }
 
+        private  Record advance(Iterator<Record> iterator){
+            if(iterator.hasNext()){
+                return iterator.next();
+            }else{
+                return null;
+            }
+        }
+
         /**
          * Returns the next record that should be yielded from this join,
          * or null if there are no more records to join.
          */
         private Record fetchNextRecord() {
             // TODO(proj3_part1): implement
+            while(leftRecord != null ){
+                if(!marked){
+                   while(leftRecord != null && rightRecord != null){
+                       DataBox l = leftRecord.getValue(getLeftColumnIndex());
+                       DataBox r = rightRecord.getValue(getRightColumnIndex());
+                       if(l.compareTo(r) < 0){
+                           leftRecord = advance(leftIterator);
+                       }else{
+                           break;
+                       }
+                   }
+                    while(leftRecord != null && rightRecord != null){
+                        DataBox l = leftRecord.getValue(getLeftColumnIndex());
+                        DataBox r = rightRecord.getValue(getRightColumnIndex());
+                        if(l.compareTo(r) > 0){
+                           rightRecord = advance(rightIterator);
+                        }else{
+                            break;
+                        }
+                    }
+                    if(leftRecord != null && rightRecord != null){
+                        rightIterator.markPrev();
+                        marked = true;
+                    }else{
+                        return null;
+                    }
+                }
+                if(leftRecord != null ) {
+                    if (rightRecord != null) {
+                        DataBox l = leftRecord.getValue(getLeftColumnIndex());
+                        DataBox r = rightRecord.getValue(getRightColumnIndex());
+                        if (l.compareTo(r) == 0) {
+                            Record result = leftRecord.concat(rightRecord);
+                            rightRecord = advance(rightIterator);
+                            return result;
+                        }else{
+                            rightIterator.reset();
+                            rightRecord = rightIterator.next();
+                            leftRecord = advance(leftIterator);
+                            marked = false;
+                        }
+                    } else {
+                        rightIterator.reset();
+                        rightRecord = rightIterator.next();
+                        leftRecord = advance(leftIterator);
+                        marked = false;
+                    }
+
+                }
+            }
             return null;
         }
 

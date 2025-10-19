@@ -88,6 +88,13 @@ public class BNLJOperator extends JoinOperator {
          */
         private void fetchNextLeftBlock() {
             // TODO(proj3_part1): implement
+
+            leftBlockIterator = getBlockIterator(leftSourceIterator,getLeftSource().getSchema(), numBuffers - 2);
+            leftBlockIterator.markNext();
+            if(leftBlockIterator.hasNext()){
+                leftRecord  = leftBlockIterator.next();
+            }
+
         }
 
         /**
@@ -103,7 +110,12 @@ public class BNLJOperator extends JoinOperator {
          */
         private void fetchNextRightPage() {
             // TODO(proj3_part1): implement
+            rightPageIterator = getBlockIterator(rightSourceIterator, getRightSource().getSchema(), 1);
+            rightPageIterator.markNext();
         }
+
+
+
 
         /**
          * Returns the next record that should be yielded from this join,
@@ -115,7 +127,35 @@ public class BNLJOperator extends JoinOperator {
          */
         private Record fetchNextRecord() {
             // TODO(proj3_part1): implement
-            return null;
+
+            if(leftRecord == null){
+                return null ;
+            }
+            while(true) {
+
+                if (rightPageIterator.hasNext()) {
+                    Record rightRecord = rightPageIterator.next();
+                    if (compare(leftRecord, rightRecord) == 0) {
+                        return leftRecord.concat(rightRecord);
+                    }
+                } else if (leftBlockIterator.hasNext()){
+                    rightPageIterator.reset();
+                    leftRecord =  leftBlockIterator.next();
+
+                } else if (rightSourceIterator.hasNext()){
+                        fetchNextRightPage();
+                        leftBlockIterator.reset();
+                        leftRecord = leftBlockIterator.next();
+                }else if(leftSourceIterator.hasNext()){
+                        fetchNextLeftBlock();
+                        rightSourceIterator.reset();
+                        fetchNextRightPage();
+
+                } else {
+                    // if you're here then there are no more records to fetch
+                    return null;
+                }
+            }
         }
 
         /**
