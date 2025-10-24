@@ -577,6 +577,23 @@ public class QueryPlan {
         QueryOperator minOp = new SequentialScanOperator(this.transaction, table);
 
         // TODO(proj3_part2): implement
+        int minCost = minOp.estimateIOCost();
+        int minCostIndex = -1;
+
+        List<Integer> eligibleIndexColumns =  getEligibleIndexColumns(table);
+        for(int index  : eligibleIndexColumns){
+            SelectPredicate  curP =  selectPredicates.get(index);
+            IndexScanOperator curIndexScan= new IndexScanOperator(transaction, curP.tableName, curP.column,
+                    curP.operator, curP.value);
+            int curCost = curIndexScan.estimateIOCost();
+            if( curCost < minCost){
+                minCost = curCost;
+                minOp = curIndexScan;
+                minCostIndex =index;
+            }
+        }
+
+        minOp = addEligibleSelections(minOp, minCostIndex);
         return minOp;
     }
 
@@ -646,6 +663,35 @@ public class QueryPlan {
         //      calculate the cheapest join with the new table (the one you
         //      fetched an operator for from pass1Map) and the previously joined
         //      tables. Then, update the result map if needed.
+        for(Set<String> prevKey : prevMap.keySet() ){
+            for(JoinPredicate joinP : joinPredicates){
+                String joinTableName = null;
+                QueryOperator newJoinsOp = null;
+                if(prevKey.contains(joinP.leftTable) && !prevKey.contains(joinP.rightTable)){
+                    joinTableName  = joinP.rightTable;
+                    QueryOperator fetchedOp = pass1Map.get(Set.of(joinTableName));
+                    newJoinsOp = minCostJoinType(prevMap.get(prevKey), fetchedOp, joinP.leftColumn, joinP.rightColumn);
+                }else if( prevKey.contains(joinP.rightTable) && !prevKey.contains(joinP.leftTable)){
+                    joinTableName = joinP.leftTable;
+                    QueryOperator fetchedOp = pass1Map.get(Set.of(joinTableName));
+                    newJoinsOp = minCostJoinType(prevMap.get(prevKey), fetchedOp, joinP.rightColumn, joinP.leftColumn);
+                }else{
+                    continue;
+                }
+                Set<String> newTableSet = new HashSet<>(prevKey);
+                newTableSet.add(joinTableName);
+
+                if(!result.containsKey(newTableSet)){
+                    result.put(newTableSet, newJoinsOp);
+                }else{
+                    int newCost = newJoinsOp.estimateIOCost();
+                    int oldCost = result.get(newTableSet).estimateIOCost();
+                    if(newCost < oldCost){
+                        result.put(newTableSet, newJoinsOp);
+                    }
+                }
+            }
+        }
         return result;
     }
 
@@ -695,7 +741,29 @@ public class QueryPlan {
         // Set the final operator to the lowest cost operator from the last
         // pass, add group by, project, sort and limit operators, and return an
         // iterator over the final operator.
-        return this.executeNaive(); // TODO(proj3_part2): Replace this!
+        if(tableNames.size() == 0) return null;
+        Map<Set<String>, QueryOperator> pass1Map = new HashMap<>();
+
+        for(String  table : tableNames ){
+            QueryOperator initOp = minCostSingleAccess(table);
+            pass1Map.put(Set.of(table), initOp);
+        }
+        if(pass1Map.size() == 1){
+            finalOperator = pass1Map.values().iterator().next();
+        }else{
+            Map<Set<String>, QueryOperator> curPassMap  = minCostJoins(pass1Map, pass1Map);
+            while(curPassMap.size() > 1){
+                curPassMap = minCostJoins(curPassMap, pass1Map);
+            }
+            assert  curPassMap.size() == 1;
+            finalOperator  = curPassMap.values().iterator().next();
+        }
+
+        this.addGroupBy();
+        this.addProject();
+        this.addSort();
+        this.addLimit();
+        return finalOperator.iterator();
     }
 
     // EXECUTE NAIVE ///////////////////////////////////////////////////////////
