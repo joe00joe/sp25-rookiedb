@@ -213,7 +213,7 @@ public class LockManager {
             LockType  heldLockType = resourceEntry.getTransactionLockType(transaction.getTransNum());
             boolean updating = heldLockType != LockType.NL
                     && LockType.substitutable(lockType, heldLockType)
-                    && releaseNames.contains(heldLockType);
+                    && releaseNames.contains(name);
 
             if(heldLockType != LockType.NL && !updating){
                 throw new DuplicateLockRequestException("acquireAndRelease: acquire failed!");
@@ -225,16 +225,16 @@ public class LockManager {
             }
             Long transNum = transaction.getTransNum();
             Lock requiringLock = new Lock(name, lockType, transNum);
-            if(resourceEntry.checkCompatible(lockType, transNum)){
+            if(resourceEntry.checkCompatible(lockType, transNum) && resourceEntry.waitingQueue.isEmpty()){
                 addOrUpdateTransLock(transNum, requiringLock);
                 resourceEntry.grantOrUpdateLock(requiringLock);
                 for(ResourceName resourceName : releaseNames){
-                    if(releaseNames.equals(name) && updating){
+                    if(resourceName.equals(name) && updating){
                         continue;
                     }
-                    Lock curNameLock = new Lock(name, getLockType(transaction, resourceName), transNum);
+                    Lock curNameLock = new Lock(resourceName, getLockType(transaction, resourceName), transNum);
                     removeTransLock(transNum, curNameLock);
-                    resourceEntry.releaseLock(curNameLock);
+                    getResourceEntry(resourceName).releaseLock(curNameLock);
                 }
             }else{
                 List<Lock> releasedLocks = new ArrayList<>();
@@ -276,7 +276,7 @@ public class LockManager {
                 throw new DuplicateLockRequestException("acquire existed lock");
             }
             Lock requiringLock = new Lock(name, lockType, transaction.getTransNum());
-            if(resourceEntry.checkCompatible(lockType, -1)){
+            if(resourceEntry.checkCompatible(lockType, -1) && resourceEntry.waitingQueue.isEmpty()){
                 addOrUpdateTransLock(transaction.getTransNum(), requiringLock);
                 resourceEntry.grantOrUpdateLock(requiringLock);
 
