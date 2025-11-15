@@ -22,7 +22,34 @@ public enum LockType {
             throw new NullPointerException("null lock type");
         }
         // TODO(proj4_part1): implement
+        if(a == NL || b == NL) {
+            return true;
+        }
+        if(a == IS){
+            return b == X ? false : true;
+        }
+        if(a == IX){
+            if( b == X || b == S || b == SIX){
+                return false;
+            }else{
+                return true;
+            }
+        }
 
+        if(a == S){
+            if(b == S || b == IS){
+                return true;
+            }else{
+                return false;
+            }
+        }
+
+        if(a == SIX){
+           return b == IS ? true : false;
+        }
+        if(a == X){
+            return false;
+        }
         return false;
     }
 
@@ -54,10 +81,10 @@ public enum LockType {
             throw new NullPointerException("null lock type");
         }
         // TODO(proj4_part1): implement
-
-        return false;
+        return substitutable(parentLockType, parentLock(childLockType));
     }
 
+    /*X可以替代全部；SIX替代除X外的全部；S替代IS；IX替代IS */
     /**
      * This method returns whether a lock can be used for a situation
      * requiring another lock (e.g. an S lock can be substituted with
@@ -69,7 +96,26 @@ public enum LockType {
             throw new NullPointerException("null lock type");
         }
         // TODO(proj4_part1): implement
+       if(substitute == required) {
+           return true;
+       }
+       if(required == NL){
+           return true;
+       }
 
+       if(substitute == X){
+           return true;
+       }
+       if(substitute == SIX && required != X){
+           return true;
+       }
+
+       if(substitute == S && required == IS){
+           return true;
+       }
+       if(substitute == IX && required == IS){
+           return true;
+       }
         return false;
     }
 
